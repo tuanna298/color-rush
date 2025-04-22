@@ -90,6 +90,21 @@ export class ColorZoneGame {
 
   // Setup all event listeners
   setupEventListeners() {
+    // Driving assist toggle
+    const assistCheckbox = document.getElementById('assist-checkbox');
+    if (assistCheckbox) {
+      // Load saved state from localStorage
+      const savedAssistState = localStorage.getItem('autoDrive') === 'true';
+      this.state.autoDrive = savedAssistState;
+      assistCheckbox.checked = savedAssistState;
+
+      // Add event listener for toggle
+      assistCheckbox.addEventListener('change', (e) => {
+        this.state.autoDrive = e.target.checked;
+        localStorage.setItem('autoDrive', this.state.autoDrive);
+      });
+    }
+
     // Keyboard controls
     document.addEventListener('keydown', this.handleKeyDown);
     document.addEventListener('keyup', this.handleKeyUp);
@@ -99,39 +114,63 @@ export class ColorZoneGame {
     const rightButton = document.getElementById('right-button');
 
     if (leftButton && rightButton) {
-      leftButton.addEventListener(
-        'mousedown',
-        () => (this.state.isMovingLeft = true),
-      );
-      leftButton.addEventListener(
-        'mouseup',
-        () => (this.state.isMovingLeft = false),
-      );
-      rightButton.addEventListener(
-        'mousedown',
-        () => (this.state.isMovingRight = true),
-      );
-      rightButton.addEventListener(
-        'mouseup',
-        () => (this.state.isMovingRight = false),
-      );
+      leftButton.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        if (this.state.autoDrive) {
+          this.handleAutoDriveLeft();
+        } else {
+          this.state.isMovingLeft = true;
+        }
+      });
+      leftButton.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        if (!this.state.autoDrive) {
+          this.state.isMovingLeft = false;
+        }
+      });
+      rightButton.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        if (this.state.autoDrive) {
+          this.handleAutoDriveRight();
+        } else {
+          this.state.isMovingRight = true;
+        }
+      });
+      rightButton.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        if (!this.state.autoDrive) {
+          this.state.isMovingRight = false;
+        }
+      });
 
       // Touch support for mobile buttons
       leftButton.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        this.state.isMovingLeft = true;
+        if (this.state.autoDrive) {
+          this.handleAutoDriveLeft();
+        } else {
+          this.state.isMovingLeft = true;
+        }
       });
       leftButton.addEventListener('touchend', (e) => {
         e.preventDefault();
-        this.state.isMovingLeft = false;
+        if (!this.state.autoDrive) {
+          this.state.isMovingLeft = false;
+        }
       });
       rightButton.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        this.state.isMovingRight = true;
+        if (this.state.autoDrive) {
+          this.handleAutoDriveRight();
+        } else {
+          this.state.isMovingRight = true;
+        }
       });
       rightButton.addEventListener('touchend', (e) => {
         e.preventDefault();
-        this.state.isMovingRight = false;
+        if (!this.state.autoDrive) {
+          this.state.isMovingRight = false;
+        }
       });
     }
 
@@ -139,17 +178,48 @@ export class ColorZoneGame {
     this.elements.restartButton.addEventListener('click', this.handleRestart);
   }
 
+  handleAutoDriveLeft() {
+    if (this.state.carX <= 60) {
+      this.moveCarTo(20); // Giữa lane bên trái
+    } else if (this.state.carX <= 80) {
+      this.moveCarTo(50); // Giữa lane giữa
+    } else {
+      return; // Không di chuyển nếu đã ở lane bên trái
+    }
+  }
+
+  handleAutoDriveRight() {
+    if (this.state.carX <= 40) {
+      this.moveCarTo(50); // Giữa lane giữa
+    } else if (this.state.carX <= 60) {
+      this.moveCarTo(80);
+    } else {
+      return; // Không di chuyển nếu đã ở lane bên phải
+    }
+  }
+
   // Handle keyboard key press
   handleKeyDown(e) {
     if (!this.state.gameRunning) return;
 
-    switch (e.key) {
-      case 'ArrowLeft':
-        this.state.isMovingLeft = true;
-        break;
-      case 'ArrowRight':
-        this.state.isMovingRight = true;
-        break;
+    if (this.state.autoDrive) {
+      switch (e.key) {
+        case 'ArrowLeft':
+          this.handleAutoDriveLeft();
+          break;
+        case 'ArrowRight':
+          this.handleAutoDriveRight();
+          break;
+      }
+    } else {
+      switch (e.key) {
+        case 'ArrowLeft':
+          this.state.isMovingLeft = true;
+          break;
+        case 'ArrowRight':
+          this.state.isMovingRight = true;
+          break;
+      }
     }
   }
 
