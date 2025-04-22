@@ -1,6 +1,13 @@
+import bgMusic1 from '../../assets/audios/bgMusic1.mp3';
+import diffChangeAlertMusic from '../../assets/audios/diff-change-alert.mp3';
+import wrongBuzzer from '../../assets/audios/wrong-buzzer.mp3';
+
 // Game Class - Quản lý toàn bộ trò chơi
 export class ColorZoneGame {
   constructor() {
+    // Danh sách nhạc nền
+    this.backgroundMusicList = [bgMusic1];
+
     // DOM Elements
     this.elements = {
       car: document.getElementById('car'),
@@ -29,6 +36,9 @@ export class ColorZoneGame {
       animationFrameId: null,
       carMovementFrameId: null,
       zoneAnimationInterval: null,
+      ingameBackgroundMusic: null,
+      diffChangeAlertMusic: null,
+      difficultyLevel: 1, // Difficulty level (1-5)
     };
 
     // Constants
@@ -46,6 +56,8 @@ export class ColorZoneGame {
       { min: 33, max: 66 }, // Center zone (25-60% of road width)
       { min: 66, max: 100 }, // Right zone (60-100% of road width)
     ];
+
+    this.state.diffChangeAlertMusic = new Audio(diffChangeAlertMusic);
 
     // Bind event handlers to maintain 'this' context
     this.handleKeyDown = this.handleKeyDown.bind(this);
@@ -316,7 +328,15 @@ export class ColorZoneGame {
     const { colorWord, leftZone, centerZone, rightZone } = this.elements;
 
     // Define difficulty levels based on score
+    const previousDifficultyLevel = this.state.difficultyLevel || 1;
     const difficultyLevel = Math.min(5, Math.floor(this.state.score / 50) + 1);
+    this.state.difficultyLevel = difficultyLevel;
+
+    if (difficultyLevel > previousDifficultyLevel) {
+      this.state.diffChangeAlertMusic.play().catch((error) => {
+        console.error('Error playing difficulty change sound:', error);
+      });
+    }
 
     // Extended color palette (thêm nhiều màu hơn khi độ khó tăng)
     const extendedColors = [
@@ -601,6 +621,18 @@ export class ColorZoneGame {
     if (this.state.zoneAnimationInterval)
       clearInterval(this.state.zoneAnimationInterval);
 
+    if (this.state.ingameBackgroundMusic) {
+      this.state.ingameBackgroundMusic.pause();
+      this.state.ingameBackgroundMusic.currentTime = 0; // Reset to the beginning
+    }
+
+    // Play wrong answer sound
+    const wrongAnswerSound = new Audio(wrongBuzzer);
+    wrongAnswerSound.currentTime = 1; // Đặt thời gian bắt đầu
+    wrongAnswerSound.play().catch((error) => {
+      console.error('Error playing wrong answer sound:', error);
+    });
+
     // Show game over screen
     this.elements.finalScoreElement.textContent = `Điểm: ${this.state.score}`;
     this.elements.gameOverScreen.style.display = 'flex';
@@ -741,6 +773,18 @@ export class ColorZoneGame {
     this.animateRoadLines();
     this.updateCarMovement();
     this.createColorZone();
+
+    // Phát nhạc nền ngẫu nhiên
+    const randomMusic =
+      this.backgroundMusicList[
+        Math.floor(Math.random() * this.backgroundMusicList.length)
+      ];
+    this.state.ingameBackgroundMusic = new Audio(randomMusic);
+    this.state.ingameBackgroundMusic.volume = 0.5; // Điều chỉnh âm lượng
+    this.state.ingameBackgroundMusic.loop = true; // Lặp lại nhạc
+    this.state.ingameBackgroundMusic.play().catch((error) => {
+      console.error('Error playing background music:', error);
+    });
   }
 
   // Clean up resources (call when game is no longer needed)
