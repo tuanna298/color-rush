@@ -58,6 +58,7 @@ export class ColorZoneGame {
     ];
 
     this.state.diffChangeAlertMusic = new Audio(diffChangeAlertMusic);
+    this.state.diffChangeAlertMusic.volume = 0.5; // Set volume for difficulty change alert
 
     // Bind event handlers to maintain 'this' context
     this.handleKeyDown = this.handleKeyDown.bind(this);
@@ -328,11 +329,11 @@ export class ColorZoneGame {
     const { colorWord, leftZone, centerZone, rightZone } = this.elements;
 
     // Define difficulty levels based on score
-    const previousDifficultyLevel = this.state.difficultyLevel || 1;
     const difficultyLevel = Math.min(5, Math.floor(this.state.score / 50) + 1);
     this.state.difficultyLevel = difficultyLevel;
 
-    if (difficultyLevel > previousDifficultyLevel) {
+    // Phát âm thanh mỗi khi điểm số là bội số của 100
+    if (this.state.score > 0 && this.state.score % 100 === 0) {
       this.state.diffChangeAlertMusic.play().catch((error) => {
         console.error('Error playing difficulty change sound:', error);
       });
