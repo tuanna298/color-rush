@@ -604,9 +604,9 @@ export class ColorZoneGame {
         }, {});
 
         // Convert the object back to an array and sort by score in descending order
-        const sortedData = Object.values(highestScores).sort(
-          (a, b) => b.score - a.score,
-        );
+        const sortedData = Object.values(highestScores)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 10); // Limit to top 10
 
         // Populate leaderboard with rank, name, and score
         sortedData.forEach((entry, index) => {
