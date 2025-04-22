@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Color Rush</title>
+    <link rel="stylesheet" href="style.css" />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="player-name-modal" class="modal">
+      <div class="modal-content">
+        <h2>Cậu tên là gì</h2>
+        <input type="text" id="player-name-input" placeholder="Your Name" />
+        <button id="start-game-button">Bắt đầu</button>
+      </div>
+    </div>
+    <div id="leaderboard-modal" class="modal">
+      <div class="modal-content">
+        <h2>Bảng xếp hạng</h2>
+        <div id="leaderboard-loading" style="display: none">Đang tải...</div>
+        <ul id="leaderboard-list"></ul>
+        <button id="close-leaderboard-button">Đóng</button>
+      </div>
+    </div>
+    <div id="mobile-controls">
+      <button id="left-button"><i class="fas fa-arrow-left"></i></button>
+      <button id="right-button"><i class="fas fa-arrow-right"></i></button>
+    </div>
+    <div id="game-container">
+      <div id="title">Color Rush</div>
+      <div id="road">
+        <div id="lines-container"></div>
+      </div>
+      <div id="question">Màu gì đây?</div>
+      <div id="color-word">Đỏ</div>
+      <div id="car"></div>
+      <div id="score">Điểm: 0</div>
+
+      <div class="color-zone" id="left-zone"></div>
+      <div class="color-zone" id="center-zone"></div>
+      <div class="color-zone" id="right-zone"></div>
+
+      <div id="game-over">
+        <h1>Game Over!</h1>
+        <p id="final-score">Điểm: 0</p>
+        <div id="highest-score-display">Điểm cao nhất: 0</div>
+        <button id="restart-button">Chơi lại</button>
+        <button id="view-leaderboard-button">Bảng xếp hạng Top 10</button>
+      </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+  </body>
+</html>
