@@ -39,6 +39,7 @@ export class ColorZoneGame {
       ingameBackgroundMusic: null,
       diffChangeAlertMusic: null,
       difficultyLevel: 1, // Difficulty level (1-5)
+      autoDrive: true,
     };
 
     // Constants
@@ -106,8 +107,8 @@ export class ColorZoneGame {
     // Driving assist toggle
     const assistCheckbox = document.getElementById('assist-checkbox');
     if (assistCheckbox) {
-      // Load saved state from localStorage
-      const savedAssistState = localStorage.getItem('autoDrive') === 'true';
+      // Load saved state from localStorage, default to true if not set
+      const savedAssistState = localStorage.getItem('autoDrive') !== 'false';
       this.state.autoDrive = savedAssistState;
       assistCheckbox.checked = savedAssistState;
 
