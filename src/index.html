@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Color Rush</title>
+    <title>Color Rush - Neon Edition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Poppins:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="style.css" />
     <link
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
@@ -12,51 +18,69 @@
   </head>
   <body>
     <div id="player-name-modal" class="modal">
-      <div class="modal-content">
-        <h2>Cậu tên là gì</h2>
-        <input type="text" id="player-name-input" placeholder="Your Name" />
-        <button id="start-game-button">Bắt đầu</button>
+      <div class="modal-content glass-panel">
+        <h2 class="neon-text">WHO ARE YOU?</h2>
+        <input
+          type="text"
+          id="player-name-input"
+          placeholder="ENTER CODENAME"
+          autocomplete="off"
+        />
+        <button id="start-game-button" class="neon-button">START ENGINE</button>
       </div>
     </div>
     <div id="leaderboard-modal" class="modal">
-      <div class="modal-content">
-        <h2>Bảng xếp hạng</h2>
-        <div id="leaderboard-loading" style="display: none">Đang tải...</div>
+      <div class="modal-content glass-panel">
+        <h2 class="neon-text">HALL OF FAME</h2>
+        <div id="leaderboard-loading" style="display: none">SYNCING...</div>
         <ul id="leaderboard-list"></ul>
-        <button id="close-leaderboard-button">Đóng</button>
+        <button id="close-leaderboard-button" class="neon-button">CLOSE</button>
       </div>
     </div>
-    <div id="mobile-controls">
-      <button id="left-button"><i class="fas fa-arrow-left"></i></button>
-      <button id="right-button"><i class="fas fa-arrow-right"></i></button>
+    <div id="touch-controls-left" class="touch-zone">
+      <div class="touch-arrow"><i class="fas fa-chevron-left"></i></div>
+      <div class="touch-hint">TOUCH TO STEER</div>
     </div>
+    <div id="touch-controls-right" class="touch-zone">
+      <div class="touch-arrow"><i class="fas fa-chevron-right"></i></div>
+      <div class="touch-hint">TOUCH TO STEER</div>
+    </div>
+
     <div id="game-container">
+      <div id="game-header">
+        <div id="driving-assist-toggle">
+          <label class="switch">
+            <input type="checkbox" id="assist-checkbox" />
+            <span class="slider round"></span>
+          </label>
+          <span class="toggle-label">ASSIST</span>
+        </div>
+        <div id="score">SCORE: 0</div>
+      </div>
+
       <div id="title">Color Rush</div>
+
       <div id="road">
         <div id="lines-container"></div>
       </div>
       <div id="question">Màu gì đây?</div>
       <div id="color-word">Đỏ</div>
       <div id="car"></div>
-      <div id="score">Điểm: 0</div>
-      <div id="driving-assist-toggle">
-        <label class="switch">
-          <input type="checkbox" id="assist-checkbox" />
-          <span class="slider round"></span>
-        </label>
-        <span class="toggle-label">Hỗ trợ lái</span>
-      </div>
 
       <div class="color-zone" id="left-zone"></div>
       <div class="color-zone" id="center-zone"></div>
       <div class="color-zone" id="right-zone"></div>
 
       <div id="game-over">
-        <h1>Game Over!</h1>
-        <p id="final-score">Điểm: 0</p>
-        <div id="highest-score-display">Điểm cao nhất: 0</div>
-        <button id="restart-button">Chơi lại</button>
-        <button id="view-leaderboard-button">Bảng xếp hạng Top 10</button>
+        <h1 class="neon-text glitch" data-text="GAME OVER">GAME OVER</h1>
+        <p id="final-score">SCORE: 0</p>
+        <div id="highest-score-display">BEST: 0</div>
+        <div class="game-over-controls">
+          <button id="restart-button" class="neon-button pulse">RETRY</button>
+          <button id="view-leaderboard-button" class="neon-button">
+            RANKINGS
+          </button>
+        </div>
       </div>
     </div>
 

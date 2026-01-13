@@ -44,12 +44,12 @@ export class ColorZoneGame {
 
     // Constants
     this.colors = [
-      { name: 'ĐỎ', hex: '#FF0000' },
-      { name: 'XANH DƯƠNG', hex: '#0000FF' },
-      { name: 'XANH LÁ', hex: '#00FF00' },
-      { name: 'VÀNG', hex: '#FFFF00' },
-      { name: 'TÍM', hex: '#800080' },
-      { name: 'CAM', hex: '#FFA500' },
+      { name: 'RED', hex: '#FF0000' },
+      { name: 'BLUE', hex: '#0000FF' },
+      { name: 'GREEN', hex: '#00FF00' },
+      { name: 'YELLOW', hex: '#FFFF00' },
+      { name: 'PURPLE', hex: '#800080' },
+      { name: 'ORANGE', hex: '#FFA500' },
     ];
 
     this.zones = [
@@ -124,68 +124,58 @@ export class ColorZoneGame {
     document.addEventListener('keyup', this.handleKeyUp);
 
     // Mobile button controls
-    const leftButton = document.getElementById('left-button');
-    const rightButton = document.getElementById('right-button');
+    const leftTouchZone = document.getElementById('touch-controls-left');
+    const rightTouchZone = document.getElementById('touch-controls-right');
 
-    if (leftButton && rightButton) {
-      leftButton.addEventListener('mousedown', (e) => {
+    if (leftTouchZone && rightTouchZone) {
+      const handleLeftStart = (e) => {
         e.preventDefault();
         if (this.state.autoDrive) {
           this.handleAutoDriveLeft();
         } else {
           this.state.isMovingLeft = true;
         }
-      });
-      leftButton.addEventListener('mouseup', (e) => {
-        e.preventDefault();
-        if (!this.state.autoDrive) {
-          this.state.isMovingLeft = false;
-        }
-      });
-      rightButton.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        if (this.state.autoDrive) {
-          this.handleAutoDriveRight();
-        } else {
-          this.state.isMovingRight = true;
-        }
-      });
-      rightButton.addEventListener('mouseup', (e) => {
-        e.preventDefault();
-        if (!this.state.autoDrive) {
-          this.state.isMovingRight = false;
-        }
-      });
+        leftTouchZone.classList.add('active');
+      };
 
-      // Touch support for mobile buttons
-      leftButton.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if (this.state.autoDrive) {
-          this.handleAutoDriveLeft();
-        } else {
-          this.state.isMovingLeft = true;
-        }
-      });
-      leftButton.addEventListener('touchend', (e) => {
+      const handleLeftEnd = (e) => {
         e.preventDefault();
         if (!this.state.autoDrive) {
           this.state.isMovingLeft = false;
         }
-      });
-      rightButton.addEventListener('touchstart', (e) => {
+        leftTouchZone.classList.remove('active');
+      };
+
+      const handleRightStart = (e) => {
         e.preventDefault();
         if (this.state.autoDrive) {
           this.handleAutoDriveRight();
         } else {
           this.state.isMovingRight = true;
         }
-      });
-      rightButton.addEventListener('touchend', (e) => {
+        rightTouchZone.classList.add('active');
+      };
+
+      const handleRightEnd = (e) => {
         e.preventDefault();
         if (!this.state.autoDrive) {
           this.state.isMovingRight = false;
         }
-      });
+        rightTouchZone.classList.remove('active');
+      };
+
+      // Touch events
+      leftTouchZone.addEventListener('touchstart', handleLeftStart);
+      leftTouchZone.addEventListener('touchend', handleLeftEnd);
+
+      rightTouchZone.addEventListener('touchstart', handleRightStart);
+      rightTouchZone.addEventListener('touchend', handleRightEnd);
+
+      // Mouse events for testing on desktop (if needed, but usually hidden)
+      leftTouchZone.addEventListener('mousedown', handleLeftStart);
+      leftTouchZone.addEventListener('mouseup', handleLeftEnd);
+      rightTouchZone.addEventListener('mousedown', handleRightStart);
+      rightTouchZone.addEventListener('mouseup', handleRightEnd);
     }
 
     // Restart button
@@ -342,18 +332,18 @@ export class ColorZoneGame {
 
     // Extended color palette (thêm nhiều màu hơn khi độ khó tăng)
     const extendedColors = [
-      { name: 'ĐỎ', hex: '#FF0000' },
-      { name: 'XANH DƯƠNG', hex: '#0000FF' },
-      { name: 'XANH LÁ', hex: '#00FF00' },
-      { name: 'VÀNG', hex: '#FFFF00' },
-      { name: 'TÍM', hex: '#800080' },
-      { name: 'CAM', hex: '#FFA500' },
-      { name: 'TRẮNG', hex: '#FFFFFF' },
-      { name: 'ĐEN', hex: '#000000' },
-      { name: 'HỒNG', hex: '#FFC0CB' },
-      { name: 'NÂU', hex: '#A52A2A' },
-      { name: 'XÁM', hex: '#808080' },
-      { name: 'XANH DƯƠNG NHẠT', hex: '#00FFFF' },
+      { name: 'RED', hex: '#FF0000' },
+      { name: 'BLUE', hex: '#0000FF' },
+      { name: 'GREEN', hex: '#00FF00' },
+      { name: 'YELLOW', hex: '#FFFF00' },
+      { name: 'PURPLE', hex: '#800080' },
+      { name: 'ORANGE', hex: '#FFA500' },
+      { name: 'WHITE', hex: '#FFFFFF' },
+      { name: 'BLACK', hex: '#000000' },
+      { name: 'PINK', hex: '#FFC0CB' },
+      { name: 'BROWN', hex: '#A52A2A' },
+      { name: 'GRAY', hex: '#808080' },
+      { name: 'CYAN', hex: '#00FFFF' },
     ];
 
     // Số lượng màu sẽ tăng dần theo difficulty level
@@ -401,7 +391,7 @@ export class ColorZoneGame {
         // Chọn ngẫu nhiên một màu tương tự
         const randomSimilar =
           availableSimilarColors[
-            Math.floor(Math.random() * availableSimilarColors.length)
+          Math.floor(Math.random() * availableSimilarColors.length)
           ];
         displayColorIndex = colorsToUse.findIndex(
           (c) => c.name === randomSimilar.name,
@@ -464,7 +454,7 @@ export class ColorZoneGame {
           if (availableSimilar.length > 0) {
             zoneColor =
               availableSimilar[
-                Math.floor(Math.random() * availableSimilar.length)
+              Math.floor(Math.random() * availableSimilar.length)
               ];
           }
         }
@@ -600,7 +590,13 @@ export class ColorZoneGame {
         if (carZone === correctLane) {
           // Correct lane - increase score and speed
           this.state.score += 10;
-          this.elements.scoreElement.textContent = `Điểm: ${this.state.score}`;
+          this.elements.scoreElement.textContent = `SCORE: ${this.state.score}`;
+
+          // Visual Feedback: Score Pulse
+          this.elements.scoreElement.classList.remove('pulse');
+          void this.elements.scoreElement.offsetWidth; // Trigger reflow
+          this.elements.scoreElement.classList.add('pulse');
+
           this.state.gameSpeed += 0.3; // Increase speed
           this.createColorZone();
         } else {
@@ -635,8 +631,13 @@ export class ColorZoneGame {
       console.error('Error playing wrong answer sound:', error);
     });
 
+    // Visual Feedback: Screen Shake
+    const gameContainer = document.getElementById('game-container');
+    gameContainer.classList.add('shake-effect');
+    setTimeout(() => gameContainer.classList.remove('shake-effect'), 500);
+
     // Show game over screen
-    this.elements.finalScoreElement.textContent = `Điểm: ${this.state.score}`;
+    this.elements.finalScoreElement.textContent = `SCORE: ${this.state.score}`;
     this.elements.gameOverScreen.style.display = 'flex';
 
     // Save high score to local storage
@@ -650,7 +651,7 @@ export class ColorZoneGame {
     const highestScoreDisplay = document.getElementById(
       'highest-score-display',
     );
-    highestScoreDisplay.textContent = `Điểm cao nhất: ${Math.max(
+    highestScoreDisplay.textContent = `BEST: ${Math.max(
       this.state.score,
       localStorage.getItem('highScore') || 0,
     )}`;
@@ -693,7 +694,7 @@ export class ColorZoneGame {
 
     // Fetch leaderboard data from Google Spreadsheet
     fetch(
-      'https://script.google.com/macros/s/AKfycbzuzBZdnR5EXZ4QjXsGMN-APeZ83Ve5GQDsqz5YpoigQPUTeQ9WlKyRVObAz6FR-C-DPg/exec',
+      'https://script.google.com/macros/s/AKfycbzR_wTa38mgZVPzQ6V0CEWyw4UaBt0Z7_SKHLM1c8PlJ-O-7lOYlb-B4SmpLKRtDNT24A/exec'
     )
       .then((response) => response.json())
       .then((data) => {
@@ -743,8 +744,8 @@ export class ColorZoneGame {
     this.state.gameRunning = true;
     this.state.carX = 50;
 
-    // Reset UI
-    this.elements.scoreElement.textContent = `Điểm: ${this.state.score}`;
+    // Update score display
+    this.elements.scoreElement.textContent = 'SCORE: 0';
     this.elements.gameOverScreen.style.display = 'none';
     this.moveCarTo(this.state.carX);
 
@@ -779,7 +780,7 @@ export class ColorZoneGame {
     // Phát nhạc nền ngẫu nhiên
     const randomMusic =
       this.backgroundMusicList[
-        Math.floor(Math.random() * this.backgroundMusicList.length)
+      Math.floor(Math.random() * this.backgroundMusicList.length)
       ];
     this.state.ingameBackgroundMusic = new Audio(randomMusic);
     this.state.ingameBackgroundMusic.volume = 0.5; // Điều chỉnh âm lượng
