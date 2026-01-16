@@ -1,706 +1,336 @@
 import bgMusic1 from '../../assets/audios/bgMusic1.mp3';
 import diffChangeAlertMusic from '../../assets/audios/diff-change-alert.mp3';
 import wrongBuzzer from '../../assets/audios/wrong-buzzer.mp3';
+import { GameEngine } from './game-engine.js';
+import { EntityManager } from './entity-manager.js';
+import { Spawner } from './spawner.js';
+import { Environment } from './environment.js';
 
-// Game Class - Quản lý toàn bộ trò chơi
 export class ColorZoneGame {
   constructor() {
-    // Danh sách nhạc nền
     this.backgroundMusicList = [bgMusic1];
 
     // DOM Elements
     this.elements = {
       car: document.getElementById('car'),
-      colorWord: document.getElementById('color-word'),
       scoreElement: document.getElementById('score'),
+      highScoreElement: document.getElementById('highest-score-display'),
+      energyFill: document.getElementById('energy-bar-fill'),
       gameOverScreen: document.getElementById('game-over'),
       finalScoreElement: document.getElementById('final-score'),
       restartButton: document.getElementById('restart-button'),
       linesContainer: document.getElementById('lines-container'),
-      leftZone: document.getElementById('left-zone'),
-      centerZone: document.getElementById('center-zone'),
-      rightZone: document.getElementById('right-zone'),
       road: document.getElementById('road'),
+      hudStats: document.getElementById('hud-stats'),
     };
 
-    // Game state
-    this.state = {
-      carX: 50, // Car position as percentage of road width
-      score: 0,
-      gameSpeed: 3,
-      gameRunning: true,
-      isDragging: false,
-      carMovementSpeed: 3,
-      isMovingLeft: false,
-      isMovingRight: false,
-      animationFrameId: null,
-      carMovementFrameId: null,
-      zoneAnimationInterval: null,
-      ingameBackgroundMusic: null,
-      diffChangeAlertMusic: null,
-      difficultyLevel: 1, // Difficulty level (1-5)
-      autoDrive: true,
-    };
+    // Initialize Sub-Systems
+    this.engine = new GameEngine({
+      speed: 8, // Increased base speed a bit
+      maxSpeed: 30
+    });
+    this.em = new EntityManager(this.engine);
+    this.spawner = new Spawner(this.engine, this.em);
+    this.env = new Environment(this.engine);
 
-    // Constants
-    this.colors = [
-      { name: 'RED', hex: '#FF0000' },
-      { name: 'BLUE', hex: '#0000FF' },
-      { name: 'GREEN', hex: '#00FF00' },
-      { name: 'YELLOW', hex: '#FFFF00' },
-      { name: 'PURPLE', hex: '#800080' },
-      { name: 'ORANGE', hex: '#FFA500' },
-    ];
+    // Register systems
+    this.engine.addSystem(this.em);
+    this.engine.addSystem(this.spawner);
+    this.engine.addSystem(this.env);
 
-    this.zones = [
-      { min: 0, max: 33 }, // Left zone (0-25% of road width)
-      { min: 33, max: 66 }, // Center zone (25-60% of road width)
-      { min: 66, max: 100 }, // Right zone (60-100% of road width)
-    ];
+    this.engine.addSystem({
+      update: (state, timeScale) => this.animateRoadLines(state.currentSpeed)
+    });
 
-    this.state.diffChangeAlertMusic = new Audio(diffChangeAlertMusic);
-    this.state.diffChangeAlertMusic.volume = 0.5; // Set volume for difficulty change alert
+    this.engine.onGameOver = (score) => this.handleGameOver(score);
 
-    // Bind event handlers to maintain 'this' context
+    // Initial State
+    this.currentLane = 1; // 0: Left, 1: Center, 2: Right
+    this.targetLane = 1;
+    this.isChangingLane = false;
+
+    // Bindings
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this.handleKeyUp = this.handleKeyUp.bind(this);
     this.handleRestart = this.handleRestart.bind(this);
-    this.animateRoadLines = this.animateRoadLines.bind(this);
-    this.updateCarMovement = this.updateCarMovement.bind(this);
+    this.loop = this.loop.bind(this);
   }
 
-  // Initialize the game
   init() {
-    // Show player name modal
     const playerNameModal = document.getElementById('player-name-modal');
     const playerNameInput = document.getElementById('player-name-input');
     const startGameButton = document.getElementById('start-game-button');
 
-    // Check if a username already exists in localStorage
     let playerName = localStorage.getItem('playerName');
     if (!playerName) {
-      // Generate a random username
       playerName = `Player_${Math.floor(Math.random() * 1000)}`;
       localStorage.setItem('playerName', playerName);
     }
-
-    // Pre-fill the input with the existing or generated username
     playerNameInput.value = playerName;
-
     playerNameModal.style.display = 'flex';
 
     startGameButton.addEventListener('click', () => {
       const newPlayerName = playerNameInput.value.trim() || playerName;
       localStorage.setItem('playerName', newPlayerName);
       playerNameModal.style.display = 'none';
-
-      // Add event listeners
       this.setupEventListeners();
-
-      // Start the game
       this.start();
     });
   }
 
-  // Setup all event listeners
   setupEventListeners() {
-    // Driving assist toggle
     const assistCheckbox = document.getElementById('assist-checkbox');
     if (assistCheckbox) {
-      // Load saved state from localStorage, default to true if not set
-      const savedAssistState = localStorage.getItem('autoDrive') !== 'false';
-      this.state.autoDrive = savedAssistState;
-      assistCheckbox.checked = savedAssistState;
-
-      // Add event listener for toggle
-      assistCheckbox.addEventListener('change', (e) => {
-        this.state.autoDrive = e.target.checked;
-        localStorage.setItem('autoDrive', this.state.autoDrive);
-      });
+      // Disable assist for V2 or repurpose it? For now, let's just keep it but it might not do much with discrete lanes.
+      // Actually, let's hide it or ignore it for the discrete lane version which is simpler.
     }
 
-    // Keyboard controls
     document.addEventListener('keydown', this.handleKeyDown);
+    // KeyUp is less relevant for discrete taps but we keep it for consistency
     document.addEventListener('keyup', this.handleKeyUp);
-
-    // Mobile button controls
-    const leftTouchZone = document.getElementById('touch-controls-left');
-    const rightTouchZone = document.getElementById('touch-controls-right');
-
-    if (leftTouchZone && rightTouchZone) {
-      const handleLeftStart = (e) => {
-        e.preventDefault();
-        if (this.state.autoDrive) {
-          this.handleAutoDriveLeft();
-        } else {
-          this.state.isMovingLeft = true;
-        }
-        leftTouchZone.classList.add('active');
-      };
-
-      const handleLeftEnd = (e) => {
-        e.preventDefault();
-        if (!this.state.autoDrive) {
-          this.state.isMovingLeft = false;
-        }
-        leftTouchZone.classList.remove('active');
-      };
-
-      const handleRightStart = (e) => {
-        e.preventDefault();
-        if (this.state.autoDrive) {
-          this.handleAutoDriveRight();
-        } else {
-          this.state.isMovingRight = true;
-        }
-        rightTouchZone.classList.add('active');
-      };
-
-      const handleRightEnd = (e) => {
-        e.preventDefault();
-        if (!this.state.autoDrive) {
-          this.state.isMovingRight = false;
-        }
-        rightTouchZone.classList.remove('active');
-      };
-
-      // Touch events
-      leftTouchZone.addEventListener('touchstart', handleLeftStart);
-      leftTouchZone.addEventListener('touchend', handleLeftEnd);
-
-      rightTouchZone.addEventListener('touchstart', handleRightStart);
-      rightTouchZone.addEventListener('touchend', handleRightEnd);
-
-      // Mouse events for testing on desktop (if needed, but usually hidden)
-      leftTouchZone.addEventListener('mousedown', handleLeftStart);
-      leftTouchZone.addEventListener('mouseup', handleLeftEnd);
-      rightTouchZone.addEventListener('mousedown', handleRightStart);
-      rightTouchZone.addEventListener('mouseup', handleRightEnd);
-    }
-
-    // Restart button
     this.elements.restartButton.addEventListener('click', this.handleRestart);
-  }
 
-  handleAutoDriveLeft() {
-    if (this.state.carX <= 60) {
-      this.moveCarTo(20); // Giữa lane bên trái
-    } else if (this.state.carX <= 80) {
-      this.moveCarTo(50); // Giữa lane giữa
-    } else {
-      return; // Không di chuyển nếu đã ở lane bên trái
-    }
-  }
+    // Touch Controls
+    const leftZone = document.getElementById('touch-controls-left');
+    const rightZone = document.getElementById('touch-controls-right');
 
-  handleAutoDriveRight() {
-    if (this.state.carX <= 40) {
-      this.moveCarTo(50); // Giữa lane giữa
-    } else if (this.state.carX <= 60) {
-      this.moveCarTo(80);
-    } else {
-      return; // Không di chuyển nếu đã ở lane bên phải
-    }
-  }
-
-  // Handle keyboard key press
-  handleKeyDown(e) {
-    if (!this.state.gameRunning) return;
-
-    if (this.state.autoDrive) {
-      switch (e.key) {
-        case 'ArrowLeft':
-          this.handleAutoDriveLeft();
-          break;
-        case 'ArrowRight':
-          this.handleAutoDriveRight();
-          break;
-      }
-    } else {
-      switch (e.key) {
-        case 'ArrowLeft':
-          this.state.isMovingLeft = true;
-          break;
-        case 'ArrowRight':
-          this.state.isMovingRight = true;
-          break;
-      }
-    }
-  }
-
-  // Handle keyboard key release
-  handleKeyUp(e) {
-    switch (e.key) {
-      case 'ArrowLeft':
-        this.state.isMovingLeft = false;
-        break;
-      case 'ArrowRight':
-        this.state.isMovingRight = false;
-        break;
-    }
-  }
-
-  // Handle restart button click
-  handleRestart() {
-    this.start();
-  }
-
-  // Move car to specific position
-  moveCarTo(positionPercent) {
-    // Get car and road dimensions
-    const carWidth = this.elements.car.offsetWidth;
-    const roadWidth = this.elements.road.offsetWidth;
-    const carWidthPercent = (carWidth / roadWidth) * 100;
-
-    // Calculate constrained position
-    this.state.carX = Math.max(
-      carWidthPercent / 2,
-      Math.min(100 - carWidthPercent / 2, positionPercent),
-    );
-
-    // Position the car (centering at cursor)
-    const actualPosition = this.state.carX - carWidthPercent / 2;
-    this.elements.car.style.left = `${actualPosition}%`;
-  }
-
-  // Create road lines
-  createRoadLines() {
-    const linesContainer = this.elements.linesContainer;
-
-    // Clear existing lines
-    while (linesContainer.firstChild) {
-      linesContainer.removeChild(linesContainer.firstChild);
-    }
-
-    // Create new lines
-    for (let i = 0; i < 10; i++) {
-      const line = document.createElement('div');
-      line.className = 'line';
-      line.style.top = `${i * 15}%`;
-      linesContainer.appendChild(line);
-    }
-  }
-
-  // Animate road lines
-  animateRoadLines() {
-    if (!this.state.gameRunning) return;
-
-    const lines = this.elements.linesContainer.querySelectorAll('.line');
-    lines.forEach((line) => {
-      const currentTop = parseFloat(line.style.top);
-      if (currentTop >= 100) {
-        line.style.top = '-5%';
-      } else {
-        line.style.top = `${currentTop + this.state.gameSpeed * 0.5}%`;
-      }
-    });
-
-    this.state.animationFrameId = requestAnimationFrame(this.animateRoadLines);
-  }
-
-  // Update car movement based on keyboard input
-  updateCarMovement() {
-    if (!this.state.gameRunning) return;
-
-    if (this.state.isMovingLeft) {
-      this.moveCarTo(this.state.carX - this.state.carMovementSpeed * 0.5);
-    }
-
-    if (this.state.isMovingRight) {
-      this.moveCarTo(this.state.carX + this.state.carMovementSpeed * 0.5);
-    }
-
-    this.state.carMovementFrameId = requestAnimationFrame(
-      this.updateCarMovement,
-    );
-  }
-
-  // Generate new color challenge
-  // Generate new color challenge with increasing difficulty
-  generateColorChallenge() {
-    const { colorWord, leftZone, centerZone, rightZone } = this.elements;
-
-    // Define difficulty levels based on score
-    const difficultyLevel = Math.min(5, Math.floor(this.state.score / 50) + 1);
-    this.state.difficultyLevel = difficultyLevel;
-
-    // Phát âm thanh mỗi khi điểm số là bội số của 100
-    if (this.state.score > 0 && this.state.score % 100 === 0) {
-      this.state.diffChangeAlertMusic.play().catch((error) => {
-        console.error('Error playing difficulty change sound:', error);
-      });
-    }
-
-    // Extended color palette (thêm nhiều màu hơn khi độ khó tăng)
-    const extendedColors = [
-      { name: 'RED', hex: '#FF0000' },
-      { name: 'BLUE', hex: '#0000FF' },
-      { name: 'GREEN', hex: '#00FF00' },
-      { name: 'YELLOW', hex: '#FFFF00' },
-      { name: 'PURPLE', hex: '#800080' },
-      { name: 'ORANGE', hex: '#FFA500' },
-      { name: 'WHITE', hex: '#FFFFFF' },
-      { name: 'BLACK', hex: '#000000' },
-      { name: 'PINK', hex: '#FFC0CB' },
-      { name: 'BROWN', hex: '#A52A2A' },
-      { name: 'GRAY', hex: '#808080' },
-      { name: 'CYAN', hex: '#00FFFF' },
-    ];
-
-    // Số lượng màu sẽ tăng dần theo difficulty level
-    const colorsToUse = extendedColors.slice(
-      0,
-      Math.min(6 + difficultyLevel, extendedColors.length),
-    );
-
-    // Các màu tương tự nhau để gây nhầm lẫn
-    const similarColors = {
-      RED: ['PINK', 'ORANGE', 'PURPLE'],
-      BLUE: ['CYAN', 'PURPLE'],
-      GREEN: ['CYAN', 'YELLOW'],
-      YELLOW: ['ORANGE', 'WHITE'],
-      PURPLE: ['BLUE', 'PINK'],
-      ORANGE: ['YELLOW', 'RED'],
-      WHITE: ['GRAY', 'YELLOW'],
-      BLACK: ['GRAY', 'PURPLE'],
-      PINK: ['RED', 'PURPLE'],
-      BROWN: ['RED', 'ORANGE'],
-      GRAY: ['WHITE', 'BLACK'],
-      CYAN: ['BLUE', 'GREEN'],
+    const handleInput = (direction) => (e) => {
+      e.preventDefault();
+      if (direction === 'left') this.moveCar(-1);
+      if (direction === 'right') this.moveCar(1);
     };
 
-    // Chọn màu đúng (correctColor) cho từ màu
-    const correctColorIndex = Math.floor(Math.random() * colorsToUse.length);
-    const correctColor = colorsToUse[correctColorIndex];
+    if (leftZone && rightZone) {
+      leftZone.addEventListener('touchstart', handleInput('left'), { passive: false });
+      rightZone.addEventListener('touchstart', handleInput('right'), { passive: false });
 
-    // Chọn màu hiển thị cho từ màu (chủ đích gây nhầm lẫn)
-    let displayColorIndex;
-
-    if (difficultyLevel >= 2 && Math.random() < 0.7) {
-      // Ở mức độ khó >= 2, có 70% khả năng chọn màu tương tự để gây nhầm lẫn
-      // Lấy danh sách các màu tương tự với màu đúng
-      const similarToCorrect = similarColors[correctColor.name] || [];
-
-      // Lọc ra các màu tương tự có trong colorsToUse
-      const availableSimilarColors = colorsToUse.filter(
-        (color) =>
-          similarToCorrect.includes(color.name) &&
-          color.name !== correctColor.name,
-      );
-
-      if (availableSimilarColors.length > 0) {
-        // Chọn ngẫu nhiên một màu tương tự
-        const randomSimilar =
-          availableSimilarColors[
-          Math.floor(Math.random() * availableSimilarColors.length)
-          ];
-        displayColorIndex = colorsToUse.findIndex(
-          (c) => c.name === randomSimilar.name,
-        );
-      } else {
-        // Nếu không có màu tương tự, chọn một màu ngẫu nhiên khác
-        do {
-          displayColorIndex = Math.floor(Math.random() * colorsToUse.length);
-        } while (displayColorIndex === correctColorIndex);
-      }
-    } else {
-      // Ở mức độ khó thấp, chỉ đơn giản chọn một màu khác ngẫu nhiên
-      do {
-        displayColorIndex = Math.floor(Math.random() * colorsToUse.length);
-      } while (displayColorIndex === correctColorIndex && difficultyLevel > 1);
-    }
-
-    // Ở mức độ khó 1, đôi khi hiển thị đúng màu (giúp người chơi làm quen)
-    if (difficultyLevel === 1 && Math.random() < 0.3) {
-      displayColorIndex = correctColorIndex;
-    }
-
-    const displayColor = colorsToUse[displayColorIndex];
-
-    // Set color word and its display color
-    colorWord.textContent = correctColor.name;
-    colorWord.style.color = displayColor.hex;
-
-    // Randomize color zone positions
-    const positions = [0, 1, 2].sort(() => Math.random() - 0.5);
-    const correctPosition = positions[0];
-
-    // Tạo các màu cho 3 zone với chiến lược gây nhầm lẫn
-    const zoneColors = [null, null, null];
-
-    // Đặt màu đúng vào vị trí đúng
-    zoneColors[correctPosition] = correctColor;
-
-    // Mảng để theo dõi các màu đã sử dụng
-    const usedColors = [correctColor.name];
-
-    // Chọn màu cho 2 zone còn lại
-    for (let i = 0; i < 3; i++) {
-      if (i !== correctPosition) {
-        let zoneColor;
-
-        // Chiến lược gây nhầm lẫn dựa vào mức độ khó
-        if (difficultyLevel >= 3 && Math.random() < 0.6) {
-          // Ở mức độ khó cao, chọn màu tương tự với correctColor hoặc displayColor
-          const targetColor = Math.random() < 0.5 ? correctColor : displayColor;
-          const similarToTarget = similarColors[targetColor.name] || [];
-
-          // Lọc ra các màu tương tự chưa sử dụng
-          const availableSimilar = colorsToUse.filter(
-            (color) =>
-              similarToTarget.includes(color.name) &&
-              !usedColors.includes(color.name),
-          );
-
-          if (availableSimilar.length > 0) {
-            zoneColor =
-              availableSimilar[
-              Math.floor(Math.random() * availableSimilar.length)
-              ];
-          }
-        }
-
-        // Nếu không chọn được màu tương tự, chọn một màu ngẫu nhiên khác
-        if (!zoneColor) {
-          let attempts = 0;
-          do {
-            const randomIndex = Math.floor(Math.random() * colorsToUse.length);
-            zoneColor = colorsToUse[randomIndex];
-            attempts++;
-
-            // Tránh vòng lặp vô hạn
-            if (attempts > 20) {
-              break;
-            }
-          } while (usedColors.includes(zoneColor.name));
-        }
-
-        zoneColors[i] = zoneColor;
-        usedColors.push(zoneColor.name);
-      }
-    }
-
-    // Đặt màu cho các zone
-    leftZone.style.backgroundColor = zoneColors[0].hex;
-    centerZone.style.backgroundColor = zoneColors[1].hex;
-    rightZone.style.backgroundColor = zoneColors[2].hex;
-
-    // Hiệu ứng đặc biệt cho mức độ khó cao
-    if (difficultyLevel >= 4 && Math.random() < 0.3) {
-      // Đôi khi đảo ngược từ màu (viết ngược, viết hoa, viết thường)
-      if (Math.random() < 0.5) {
-        colorWord.textContent = correctColor.name.split('').reverse().join('');
-      } else {
-        colorWord.textContent =
-          Math.random() < 0.5
-            ? correctColor.name.toLowerCase()
-            : correctColor.name;
-      }
-    }
-
-    // Ở mức độ khó rất cao (level 5), đôi khi làm cho chữ nhấp nháy
-    if (difficultyLevel === 5 && Math.random() < 0.2) {
-      this.startColorWordBlinking(displayColor.hex);
-    } else {
-      this.stopColorWordBlinking();
-    }
-
-    return correctPosition;
-  }
-
-  // Hàm phụ trợ để tạo hiệu ứng chữ nhấp nháy
-  startColorWordBlinking(baseColor) {
-    this.stopColorWordBlinking(); // Dừng hiệu ứng cũ nếu có
-
-    const { colorWord } = this.elements;
-    this.blinkInterval = setInterval(() => {
-      // Chuyển đổi giữa màu gốc và một màu ngẫu nhiên khác
-      if (colorWord.style.color === baseColor) {
-        const randomColor =
-          this.colors[Math.floor(Math.random() * this.colors.length)].hex;
-        colorWord.style.color = randomColor;
-      } else {
-        colorWord.style.color = baseColor;
-      }
-    }, 200);
-  }
-
-  stopColorWordBlinking() {
-    if (this.blinkInterval) {
-      clearInterval(this.blinkInterval);
-      this.blinkInterval = null;
+      // Mouse fallback
+      leftZone.addEventListener('mousedown', handleInput('left'));
+      rightZone.addEventListener('mousedown', handleInput('right'));
     }
   }
 
-  // Create and animate color zones
-  createColorZone() {
-    if (!this.state.gameRunning) return;
+  start() {
+    this.em.clearAll();
+    // Reset Engine State completely
+    this.engine.reset();
 
-    // Generate new challenge
-    const correctLane = this.generateColorChallenge();
+    this.engine.state.score = 0;
+    this.engine.state.energy = 100;
+    this.engine.state.distance = 0;
+    this.engine.state.currentSpeed = 7;
+    // Clear effects UI
+    const effectsContainer = document.getElementById('active-effects-container');
+    if (effectsContainer) effectsContainer.innerHTML = '';
 
-    // Position zones at top (off-screen)
-    const { leftZone, centerZone, rightZone } = this.elements;
-    leftZone.style.top = '-150px';
-    centerZone.style.top = '-150px';
-    rightZone.style.top = '-150px';
+    this.elements.scoreElement.textContent = 'SCORE: 0';
+    this.updateEnergyFoo(100);
+    this.elements.gameOverScreen.style.display = 'none';
+    this.createRoadLines();
+    this.playMusic();
 
-    // Animate zones
-    this.animateColorZone(correctLane);
+    // Reset Car
+    this.currentLane = 1;
+    this.targetLane = 1;
+    this.updateCarPosition();
+
+    this.engine.start();
+    this.visualLoopId = requestAnimationFrame(this.loop);
   }
 
-  // Animate color zones moving down
-  animateColorZone(correctLane) {
-    if (!this.state.gameRunning) return;
+  loop() {
+    if (!this.engine.state.isRunning) return;
 
-    const { leftZone, centerZone, rightZone } = this.elements;
-    let position = parseFloat(leftZone.style.top) || -150;
+    this.elements.scoreElement.textContent = `SCORE: ${Math.floor(this.engine.state.score)}`;
+    this.updateEnergyFoo(this.engine.state.energy);
 
-    // Clear any existing animation
-    if (this.state.zoneAnimationInterval) {
-      clearInterval(this.state.zoneAnimationInterval);
-    }
+    // Update Active Effects UI
+    this.updateActiveEffectsUI();
 
-    // Create new animation interval
-    this.state.zoneAnimationInterval = setInterval(() => {
-      position += this.state.gameSpeed;
+    // Handle Visual Side Effects of State
+    if (this.engine.state.activeEffects['BLIND']) document.body.classList.add('blind-mode');
+    else document.body.classList.remove('blind-mode');
 
-      // Move zones
-      leftZone.style.top = `${position}px`;
-      centerZone.style.top = `${position}px`;
-      rightZone.style.top = `${position}px`;
+    if (this.engine.state.activeEffects['NIGHT']) document.body.classList.add('night-mode');
+    else document.body.classList.remove('night-mode');
 
-      // Check for collision
-      if (position >= window.innerHeight - 150) {
-        clearInterval(this.state.zoneAnimationInterval);
-        this.state.zoneAnimationInterval = null;
+    if (this.engine.state.activeEffects['FLASH']) document.body.classList.add('flash-mode');
+    else document.body.classList.remove('flash-mode');
 
-        // Determine which zone the car is in
-        let carZone = null;
-        const buffer = 5; // Buffer percentage to expand zone boundaries
-        for (let i = 0; i < this.zones.length; i++) {
-          const zoneMin = this.zones[i].min - buffer;
-          const zoneMax = this.zones[i].max + buffer;
-          if (this.state.carX >= zoneMin && this.state.carX <= zoneMax) {
-            carZone = i;
-            break;
-          }
-        }
 
-        // Check if car is in correct lane
-        if (carZone === correctLane) {
-          // Correct lane - increase score and speed
-          this.state.score += 10;
-          this.elements.scoreElement.textContent = `SCORE: ${this.state.score}`;
+    // Check Collision using Physics AABB
+    const hits = this.em.checkCollision(this.elements.car);
+    hits.forEach(entity => {
+      if (entity.onCollide) {
+        entity.onCollide(entity, this.engine.state);
 
-          // Visual Feedback: Score Pulse
-          this.elements.scoreElement.classList.remove('pulse');
-          void this.elements.scoreElement.offsetWidth; // Trigger reflow
-          this.elements.scoreElement.classList.add('pulse');
-
-          this.state.gameSpeed += 0.3; // Increase speed
-          this.createColorZone();
-        } else {
-          // Wrong lane - game over
-          this.gameOver();
+        // Visual Feedback for Items (Pop-up text)
+        if (entity.type === 'item') {
+          this.showItemFeedback(entity.data.item);
         }
       }
-    }, 16);
-  }
-
-  // Game over handler
-  gameOver() {
-    this.state.gameRunning = false;
-
-    // Cancel animations
-    if (this.state.animationFrameId)
-      cancelAnimationFrame(this.state.animationFrameId);
-    if (this.state.carMovementFrameId)
-      cancelAnimationFrame(this.state.carMovementFrameId);
-    if (this.state.zoneAnimationInterval)
-      clearInterval(this.state.zoneAnimationInterval);
-
-    if (this.state.ingameBackgroundMusic) {
-      this.state.ingameBackgroundMusic.pause();
-      this.state.ingameBackgroundMusic.currentTime = 0; // Reset to the beginning
-    }
-
-    // Play wrong answer sound
-    const wrongAnswerSound = new Audio(wrongBuzzer);
-    wrongAnswerSound.currentTime = 1; // Đặt thời gian bắt đầu
-    wrongAnswerSound.play().catch((error) => {
-      console.error('Error playing wrong answer sound:', error);
     });
 
-    // Visual Feedback: Screen Shake
-    const gameContainer = document.getElementById('game-container');
-    gameContainer.classList.add('shake-effect');
-    setTimeout(() => gameContainer.classList.remove('shake-effect'), 500);
+    this.visualLoopId = requestAnimationFrame(this.loop);
+  }
 
-    // Show game over screen
-    this.elements.finalScoreElement.textContent = `SCORE: ${this.state.score}`;
-    this.elements.gameOverScreen.style.display = 'flex';
+  moveCar(direction) {
+    // Direction: -1 (Left), 1 (Right)
+    const newLane = this.currentLane + direction;
 
-    // Save high score to local storage
-    const playerName = localStorage.getItem('playerName') || 'Unknown';
-    const highScore = localStorage.getItem('highScore') || 0;
-    if (this.state.score > highScore) {
-      localStorage.setItem('highScore', this.state.score);
+    // Constrain to 0-2
+    if (newLane >= 0 && newLane <= 2) {
+      this.currentLane = newLane;
+      this.updateCarPosition(direction);
+    }
+  }
+
+  updateCarPosition(moveInfo = 0) {
+    // 3 Lanes:
+    // Lane 0: Center at 16.66%
+    // Lane 1: Center at 50%
+    // Lane 2: Center at 83.33%
+    const centerPercentages = [16.66, 50, 83.33];
+    const targetX = centerPercentages[this.currentLane];
+
+    this.elements.car.style.left = `calc(${targetX}% - 25px)`; // -25px is half of car width (50px)
+
+    // Tilt Logic
+    // If moving left (-1), tilt left (negative deg)
+    // If moving right (1), tilt right (positive deg)
+    if (moveInfo !== 0) {
+      const tiltDeg = moveInfo * 15;
+      this.elements.car.style.transform = `rotate(${tiltDeg}deg)`;
+
+      // Reset tilt after short delay (animation duration)
+      clearTimeout(this.tiltTimeout);
+      this.tiltTimeout = setTimeout(() => {
+        if (this.elements.car) this.elements.car.style.transform = `rotate(0deg)`;
+      }, 200);
+    } else {
+      this.elements.car.style.transform = `rotate(0deg)`;
+    }
+  }
+
+  updateActiveEffectsUI() {
+    let container = document.getElementById('active-effects-container');
+    if (!container) return; // Should be added to HTML
+
+    // Simple diffing or just rebuild (rebuild is fine for small num effects)
+    container.innerHTML = '';
+
+    const effects = this.engine.state.activeEffects;
+    Object.entries(effects).forEach(([name, data]) => {
+      const el = document.createElement('div');
+      el.className = 'effect-icon';
+      el.style.borderColor = data.color;
+      el.innerHTML = `<i class="fas ${data.icon}" style="color: ${data.color}"></i>`;
+
+      // Helper text for duration? Or progress ring
+      const percent = (data.remainingMs / data.totalMs) * 100;
+      el.style.background = `conic-gradient(${data.color} ${percent}%, transparent ${percent}%)`; // Simple progress bg
+
+      container.appendChild(el);
+    });
+  }
+
+  showItemFeedback(item) {
+    const feedback = document.createElement('div');
+    feedback.className = 'item-feedback';
+    feedback.innerHTML = `
+      <div style="font-size: 28px"><i class="fas ${item.icon}"></i> ${item.name}</div>
+      <div style="font-size: 16px; margin-top: 5px; color: #fff;">${item.desc || ''}</div>
+    `;
+    feedback.style.color = item.color;
+    feedback.style.textAlign = 'center';
+
+    // Add to HUD
+    this.elements.hudStats.appendChild(feedback);
+
+    // Remove after animation
+    setTimeout(() => {
+      if (feedback.parentNode) feedback.parentNode.removeChild(feedback);
+    }, 2000);
+  }
+
+  handleKeyDown(e) {
+    if (!this.engine.state.isRunning) return;
+    if (e.key === 'ArrowLeft') this.moveCar(-1);
+    if (e.key === 'ArrowRight') this.moveCar(1);
+    // Restart on space if game over?
+    if (this.elements.gameOverScreen.style.display !== 'none' && e.key === ' ') {
+      this.handleRestart();
+    }
+  }
+
+  handleKeyUp(e) {
+    // No op for discrete movement
+  }
+
+  animateRoadLines(speed) {
+    const lines = this.elements.linesContainer.querySelectorAll('.line');
+    lines.forEach(line => {
+      let top = parseFloat(line.style.top);
+      top += speed * 0.15;
+      if (top > 100) top = -15;
+      line.style.top = `${top}%`;
+    });
+  }
+
+  createRoadLines() {
+    this.elements.linesContainer.innerHTML = '';
+    for (let i = 0; i < 6; i++) {
+      const line = document.createElement('div');
+      line.className = 'line';
+      line.style.top = `${i * 20}%`;
+      this.elements.linesContainer.appendChild(line);
+    }
+  }
+
+  updateEnergyFoo(energy) {
+    if (this.elements.energyFill) {
+      this.elements.energyFill.style.width = `${energy}%`;
+      if (energy < 30) this.elements.energyFill.style.background = 'linear-gradient(90deg, #ff0000, #ff4444)';
+      else this.elements.energyFill.style.background = 'linear-gradient(90deg, #ff00ff, #00f3ff)';
+    }
+  }
+
+  handleGameOver(score) {
+    if (this.bgMusic) this.bgMusic.pause();
+    const wrongAnswerSound = new Audio(wrongBuzzer);
+    wrongAnswerSound.play().catch(e => console.log(e));
+
+    const currentHigh = parseFloat(localStorage.getItem('highScore')) || 0;
+    if (score > currentHigh) {
+      localStorage.setItem('highScore', score);
     }
 
-    // Update highest score display
-    const highestScoreDisplay = document.getElementById(
-      'highest-score-display',
-    );
-    highestScoreDisplay.textContent = `BEST: ${Math.max(
-      this.state.score,
-      localStorage.getItem('highScore') || 0,
-    )}`;
+    this.elements.finalScoreElement.textContent = `SCORE: ${score}`;
+    this.elements.gameOverScreen.style.display = 'flex';
+    this.elements.highScoreElement.textContent = `BEST: ${score}`;
 
-    // Get device information
-    const deviceInfo = navigator.userAgent;
+    // Submit score to leaderboard
+    const playerName = localStorage.getItem('playerName') || 'Unknown';
+    this.submitScore(playerName, score);
+  }
 
-    // Send score to Google Spreadsheet
-    fetch(
-      'https://script.google.com/macros/s/AKfycbzuzBZdnR5EXZ4QjXsGMN-APeZ83Ve5GQDsqz5YpoigQPUTeQ9WlKyRVObAz6FR-C-DPg/exec',
-      {
-        redirect: 'follow',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify({
-          name: playerName,
-          score: this.state.score,
-          device: deviceInfo,
-        }),
-      },
-    );
+  handleRestart() {
+    this.start();
   }
 
   showLeaderboard() {
     const leaderboardModal = document.getElementById('leaderboard-modal');
     const leaderboardList = document.getElementById('leaderboard-list');
     const leaderboardLoading = document.getElementById('leaderboard-loading');
-    const closeLeaderboardButton = document.getElementById(
-      'close-leaderboard-button',
-    );
+    const closeLeaderboardButton = document.getElementById('close-leaderboard-button');
 
-    // Clear existing leaderboard entries and show loading
     leaderboardList.innerHTML = '';
     leaderboardLoading.style.display = 'block';
-
-    // Show the modal immediately
     leaderboardModal.style.display = 'flex';
 
-    // Fetch leaderboard data from Google Spreadsheet
-    fetch(
-      'https://script.google.com/macros/s/AKfycbzR_wTa38mgZVPzQ6V0CEWyw4UaBt0Z7_SKHLM1c8PlJ-O-7lOYlb-B4SmpLKRtDNT24A/exec'
-    )
+    fetch('https://script.google.com/macros/s/AKfycbzR_wTa38mgZVPzQ6V0CEWyw4UaBt0Z7_SKHLM1c8PlJ-O-7lOYlb-B4SmpLKRtDNT24A/exec')
       .then((response) => response.json())
       .then((data) => {
-        console.log('Raw Leaderboard data:', data);
-
-        // Filter to keep only the highest score for each player
         const highestScores = data.reduce((acc, entry) => {
           if (!acc[entry.name] || acc[entry.name].score < entry.score) {
             acc[entry.name] = entry;
@@ -708,12 +338,10 @@ export class ColorZoneGame {
           return acc;
         }, {});
 
-        // Convert the object back to an array and sort by score in descending order
         const sortedData = Object.values(highestScores)
           .sort((a, b) => b.score - a.score)
-          .slice(0, 10); // Limit to top 10
+          .slice(0, 10);
 
-        // Populate leaderboard with rank, name, and score
         sortedData.forEach((entry, index) => {
           if (entry.name && entry.score) {
             const listItem = document.createElement('li');
@@ -722,7 +350,6 @@ export class ColorZoneGame {
           }
         });
 
-        // Hide loading after data is populated
         leaderboardLoading.style.display = 'none';
       })
       .catch((error) => {
@@ -730,122 +357,41 @@ export class ColorZoneGame {
         leaderboardLoading.textContent = 'Failed to load leaderboard.';
       });
 
-    // Close leaderboard modal on button click
-    closeLeaderboardButton.addEventListener('click', () => {
+    closeLeaderboardButton.onclick = () => {
       leaderboardModal.style.display = 'none';
+    };
+  }
+
+  submitScore(name, score) {
+    const url = 'https://script.google.com/macros/s/AKfycbzR_wTa38mgZVPzQ6V0CEWyw4UaBt0Z7_SKHLM1c8PlJ-O-7lOYlb-B4SmpLKRtDNT24A/exec';
+
+    // Using POST with CORS no-cors or standard text/plain to avoid preflight issues 
+    // depending on how the apps script is set up. 
+    // Usually a simple POST with URL encoded data works best for these.
+    fetch(url, {
+      method: 'POST',
+      mode: 'no-cors', // Often needed for Google Apps Script simple triggers
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, score })
+    }).then(() => {
+      console.log('Score submitted');
+    }).catch(err => {
+      console.error('Failed to submit score:', err);
     });
   }
 
-  // Start/restart game
-  start() {
-    // Reset game state
-    this.state.score = 0;
-    this.state.gameSpeed = 3;
-    this.state.gameRunning = true;
-    this.state.carX = 50;
-
-    // Update score display
-    this.elements.scoreElement.textContent = 'SCORE: 0';
-    this.elements.gameOverScreen.style.display = 'none';
-    this.moveCarTo(this.state.carX);
-
-    // Display highest score
-    const highestScore = localStorage.getItem('highScore') || 0;
-    const highestScoreDisplay = document.getElementById(
-      'highest-score-display',
-    );
-    highestScoreDisplay.textContent = `Điểm cao nhất: ${highestScore}`;
-
-    // Cancel any existing animations
-    if (this.state.animationFrameId) {
-      cancelAnimationFrame(this.state.animationFrameId);
+  playMusic() {
+    if (this.bgMusic) {
+      this.bgMusic.currentTime = 0;
+      this.bgMusic.play();
+      return;
     }
-
-    if (this.state.carMovementFrameId) {
-      cancelAnimationFrame(this.state.carMovementFrameId);
-    }
-
-    if (this.state.zoneAnimationInterval) {
-      clearInterval(this.state.zoneAnimationInterval);
-    }
-
-    // Initialize game elements
-    this.createRoadLines();
-
-    // Start animations
-    this.animateRoadLines();
-    this.updateCarMovement();
-    this.createColorZone();
-
-    // Phát nhạc nền ngẫu nhiên
-    const randomMusic =
-      this.backgroundMusicList[
-      Math.floor(Math.random() * this.backgroundMusicList.length)
-      ];
-    this.state.ingameBackgroundMusic = new Audio(randomMusic);
-    this.state.ingameBackgroundMusic.volume = 0.5; // Điều chỉnh âm lượng
-    this.state.ingameBackgroundMusic.loop = true; // Lặp lại nhạc
-    this.state.ingameBackgroundMusic.play().catch((error) => {
-      console.error('Error playing background music:', error);
-    });
-  }
-
-  // Clean up resources (call when game is no longer needed)
-  destroy() {
-    // Cancel animations
-    if (this.state.animationFrameId) {
-      cancelAnimationFrame(this.state.animationFrameId);
-    }
-
-    if (this.state.carMovementFrameId) {
-      cancelAnimationFrame(this.state.carMovementFrameId);
-    }
-
-    if (this.state.zoneAnimationInterval) {
-      clearInterval(this.state.zoneAnimationInterval);
-    }
-
-    // Remove event listeners
-    document.removeEventListener('keydown', this.handleKeyDown);
-    document.removeEventListener('keyup', this.handleKeyUp);
-
-    const leftButton = document.getElementById('left-button');
-    const rightButton = document.getElementById('right-button');
-
-    if (leftButton && rightButton) {
-      leftButton.removeEventListener(
-        'mousedown',
-        () => (this.state.isMovingLeft = true),
-      );
-      leftButton.removeEventListener(
-        'mouseup',
-        () => (this.state.isMovingLeft = false),
-      );
-      rightButton.removeEventListener(
-        'mousedown',
-        () => (this.state.isMovingRight = true),
-      );
-      rightButton.removeEventListener(
-        'mouseup',
-        () => (this.state.isMovingRight = false),
-      );
-
-      leftButton.removeEventListener(
-        'touchstart',
-        () => (this.state.isMovingLeft = true),
-      );
-      leftButton.removeEventListener(
-        'touchend',
-        () => (this.state.isMovingLeft = false),
-      );
-      rightButton.removeEventListener(
-        'touchstart',
-        () => (this.state.isMovingRight = true),
-      );
-      rightButton.removeEventListener(
-        'touchend',
-        () => (this.state.isMovingRight = false),
-      );
-    }
+    const randomMusic = this.backgroundMusicList[Math.floor(Math.random() * this.backgroundMusicList.length)];
+    this.bgMusic = new Audio(randomMusic);
+    this.bgMusic.volume = 0.5;
+    this.bgMusic.loop = true;
+    this.bgMusic.play().catch(e => console.log(e));
   }
 }
